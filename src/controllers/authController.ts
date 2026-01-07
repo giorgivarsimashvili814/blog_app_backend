@@ -2,62 +2,63 @@ import { Request, Response } from "express";
 import { prisma } from "../config/db";
 import * as bcrypt from "bcrypt";
 import { generateToken } from "../utils/generateToken";
+import { registerSchema } from "../schemas/users/register.schema";
+import z, { ZodError } from "zod";
+import { loginSchema } from "../schemas/users/login.schema";
 
-interface registerRequestBody {
-  username: string;
-  email: string;
-  password: string;
-}
-
-interface loginRequestBody {
-  username: string;
-  password: string;
-}
-
-export const register = async (
-  req: Request<{}, {}, registerRequestBody>,
-  res: Response
-) => {
+export const register = async (req: Request, res: Response) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password } = registerSchema.parse(req.body);
 
-    const existingUser = await prisma.user.findFirst({
-      where: { OR: [{ username }, { email }] },
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [{ username }, { email }],
+      },
     });
 
-    if (existingUser) {
-      const field = existingUser.username === username ? "Username" : "Email";
+    if (user) {
+      const field = user.username === username ? "Username" : "Email";
       return res.status(400).json({ error: `${field} already taken` });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = await prisma.user.create({
-      data: { username, email, password: hashedPassword },
+
+    const newUser = await prisma.user.create({
+      data: {
+        username,
+        email,
+        password: hashedPassword,
+      },
     });
 
-    const token = generateToken(user.id, res);
+    const token = generateToken(newUser.id, res);
 
     return res.status(201).json({
       status: "success",
       data: {
-        user: { id: user.id, username, email },
+        user: {
+          id: newUser.id,
+          username,
+          email,
+        },
         token,
       },
     });
   } catch (error) {
-    console.error("Registration Error:", error);
-    return res.status(500).json({ error: "Internal server error" });
+    if (error instanceof ZodError) {
+      const errors = z.treeifyError(error);
+      return res.status(400).json({ errors: errors });
+    }
+    console.error("registration Error:", error);
+    return res.status(500).json({ error: "internal server error" });
   }
 };
 
-export const login = async (
-  req: Request<{}, {}, loginRequestBody>,
-  res: Response
-) => {
+export const login = async (req: Request, res: Response) => {
   try {
-    const { username, password } = req.body;
+    const { username, password } = loginSchema.parse(req.body);
 
-    const user = await prisma.user.findFirst({ where: { username } });
+    const user = await prisma.user.findUnique({ where: { username } });
 
     if (!user) return res.status(401).json({ error: "Invalid credentials" });
 
@@ -81,6 +82,10 @@ export const login = async (
       },
     });
   } catch (error) {
+    if (error instanceof ZodError) {
+      const errors = z.treeifyError(error);
+      return res.status(400).json({ errors: errors });
+    }
     console.error(error);
     return res.status(500).json({ error: "Internal server error" });
   }
