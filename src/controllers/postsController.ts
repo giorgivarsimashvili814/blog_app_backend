@@ -32,7 +32,10 @@ export const createPost = async (req: Request, res: Response) => {
 
 export const editPost = async (req: Request, res: Response) => {
   try {
+    const user = req.user!;
+
     const { body } = editPostSchema.parse(req.body);
+
     const postId = Number(req.params.postId);
     if (isNaN(postId))
       return res.status(400).json({ error: "Invalid post ID" });
@@ -41,8 +44,8 @@ export const editPost = async (req: Request, res: Response) => {
 
     if (!post) return res.status(404).json({ error: "Post not found" });
 
-    if (!req.user || post.authorId !== req.user.id) {
-      return res.status(403).json({ error: "Forbidden: Not your post" });
+    if (user.role !== "ADMIN" && post.authorId !== user.id) {
+      return res.status(403).json({ error: "Forbidden: Cannot edit post" });
     }
 
     const updatedPost = await prisma.post.update({
@@ -63,7 +66,10 @@ export const editPost = async (req: Request, res: Response) => {
 
 export const deletePost = async (req: Request, res: Response) => {
   try {
+    const user = req.user!;
+
     const postId = Number(req.params.postId);
+
     if (isNaN(postId))
       return res.status(400).json({ error: "Invalid post ID" });
 
@@ -71,8 +77,8 @@ export const deletePost = async (req: Request, res: Response) => {
 
     if (!post) return res.status(404).json({ error: "Post not found" });
 
-    if (!req.user || post.authorId !== req.user.id) {
-      return res.status(403).json({ error: "Forbidden: Not your post" });
+    if (user.role !== "ADMIN" && post.authorId !== user.id) {
+      return res.status(403).json({ error: "Forbidden: Cannot delete post" });
     }
 
     const deletedPost = await prisma.post.delete({
@@ -84,4 +90,84 @@ export const deletePost = async (req: Request, res: Response) => {
     console.error("Delete Post Error:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
+};
+
+export const getPostById = async (req: Request, res: Response) => {
+  try {
+    const postId = Number(req.params.postId);
+    if (isNaN(postId))
+      return res.status(400).json({ error: "Invalid post ID" });
+
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      select: {
+        id: true,
+        title: true,
+        body: true,
+        createdAt: true,
+        author: {
+          select: {
+            id: true,
+            username: true,
+          },
+        },
+      },
+    });
+
+    if (!post) return res.status(404).json({ error: "Post not found" });
+
+    return res.status(200).json({ status: "success", data: post });
+  } catch (error) {
+    console.error("Get Post Error:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const getAllPosts = async (req: Request, res: Response) => {
+  try {
+    const posts = await fetchPosts();
+
+    return res.status(200).json({ status: "success", data: posts });
+  } catch (error) {
+    console.error("Get All Posts Error:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const getPostsByAuthor = async (req: Request, res: Response) => {
+  try {
+    const authorId = Number(req.params.authorId);
+    if (isNaN(authorId))
+      return res.status(400).json({ error: "Invalid user ID" });
+
+    const posts = await fetchPosts({ authorId });
+
+    if (posts.length === 0) {
+      return res.status(404).json({ error: "No posts found" });
+    }
+
+    return res.status(200).json({ status: "success", data: posts });
+  } catch (error) {
+    console.error("Get Posts By Author Error:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+const fetchPosts = async (filter?: { authorId?: number }) => {
+  return prisma.post.findMany({
+    where: filter,
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      title: true,
+      body: true,
+      createdAt: true,
+      author: {
+        select: {
+          id: true,
+          username: true,
+        },
+      },
+    },
+  });
 };
