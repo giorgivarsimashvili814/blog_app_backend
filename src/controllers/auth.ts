@@ -2,9 +2,9 @@ import { Request, Response } from "express";
 import { prisma } from "../config/db";
 import * as bcrypt from "bcrypt";
 import { generateRefreshToken } from "../utils/generateRefreshToken";
-import { registerSchema } from "../schemas/users/register.schema";
+import { registerSchema } from "../schemas/auth/register.schema";
 import z, { ZodError } from "zod";
-import { loginSchema } from "../schemas/users/login.schema";
+import { loginSchema } from "../schemas/auth/login.schema";
 import { Prisma } from "../generated/prisma/client";
 import { generateAccessToken } from "../utils/generateAccessToken";
 import { setRefreshTokenCookie } from "../utils/setRefreshTokenCookie";
@@ -114,8 +114,6 @@ export const refresh = async (req: Request, res: Response) => {
     const newRefreshToken = generateRefreshToken(payload.userId, payload.role);
 
     setRefreshTokenCookie(res, newRefreshToken);
-
-    console.log({ accessToken, newRefreshToken });
 
     return res.status(200).json({ accessToken });
   } catch (error) {

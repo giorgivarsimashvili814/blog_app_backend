@@ -1,4 +1,4 @@
-import express from "express";
+import Router from "express";
 import {
   createPost,
   deletePost,
@@ -6,10 +6,10 @@ import {
   getAllPosts,
   getPostById,
   getPostsByAuthor,
-} from "../controllers/postsController";
+} from "../controllers/posts";
 import { isAuth } from "../middlewares/isAuth";
 
-const router = express.Router();
+const router = Router();
 
 router.post("/", isAuth, createPost);
 router.patch("/:postId", isAuth, editPost);
